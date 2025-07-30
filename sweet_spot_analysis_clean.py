@@ -142,11 +142,11 @@ class SweetSpotCaloriePredictor:
         total_removed = initial_rows - final_rows
         
         print(f"\n--- CLEANING SUMMARY ---")
-        print(f"Records removed for invalid calories (< 5 or > 2000): {calories_removed:,}")
-        print(f"Records removed for invalid duration (< 1 minute or > 5 hours): {duration_removed:,}")
-        print(f"Records removed for invalid distance (< 100 m or > 100 km): {distance_removed:,}")
-        print(f"Final rows after cleaning: {final_rows:,}")
+        print(f"Records flagged for invalid calories (< 5 or > 2000): {calories_removed:,}")
+        print(f"Records flagged for invalid duration (< 1 minute or > 5 hours): {duration_removed:,}")
+        print(f"Records flagged for invalid distance (< 100 m or > 100 km): {distance_removed:,}")
         print(f"Total rows removed: {total_removed:,}")
+        print(f"Final rows after cleaning: {final_rows:,}")
         print(f"Data retention: {((final_rows/initial_rows)*100):.1f}%")
         
         self.df_cleaned = self.df.copy()
@@ -354,7 +354,7 @@ class SweetSpotCaloriePredictor:
         r2 = r2_score(y_test, y_pred)
         
         # Cross-validation
-        cv_scores = cross_val_score(self.model, X, y, cv=5, scoring='neg_mean_absolute_error')
+        cv_scores = cross_val_score(self.model, X_train, y_train, cv=5, scoring='neg_mean_absolute_error')
         cv_mae = -cv_scores.mean()
         cv_std = cv_scores.std()
         
