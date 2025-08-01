@@ -14,9 +14,6 @@ class DataVisualizer:
         # Plot raw data before cleaning
         print("Creating pre-cleaning visualizations...")
         
-        # Update dataframe reference
-        #self.df = self.data_manager.df
-        
         fig, axes = plt.subplots(2, 3, figsize=(18, 12))
         fig.suptitle('Data Distribution Before Cleaning', fontsize=16)
         

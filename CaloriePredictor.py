@@ -16,23 +16,23 @@ class CaloriePredictor:
         self.feature_columns = None
         
     def create_features(self):
-        """Create derived features"""
+        
         print("\nCreating features...")
         
-        # Update dataframe reference
-        self.df = self.data_manager.df
+        # Create a copy of the dataframe to avoid SettingWithCopyWarning
+        self.df = self.data_manager.df.copy()
         
         # Basic derived features
-        self.df['PACE'] = self.df['DURATION_ACTUAL'] / (self.df['DISTANCE_ACTUAL'] / 1000)  # hours per km
-        self.df['SPEED'] = (self.df['DISTANCE_ACTUAL'] / 1000) / self.df['DURATION_ACTUAL']  # km per hour
+        self.df.loc[:, 'PACE'] = self.df['DURATION_ACTUAL'] / (self.df['DISTANCE_ACTUAL'] / 1000)  # hours per km
+        self.df.loc[:, 'SPEED'] = (self.df['DISTANCE_ACTUAL'] / 1000) / self.df['DURATION_ACTUAL']  # km per hour
         
         # Intensity ratio (HR_avg / HR_max) - common metric in exercise physiology
         # This ratio indicates exercise intensity relative to max capacity
-        self.df['INTENSITY_RATIO'] = self.df['HRAVG'] / self.df['HRMAX']
+        self.df.loc[:, 'INTENSITY_RATIO'] = self.df['HRAVG'] / self.df['HRMAX']
         
         # Encode categorical variables
         if 'SEX' in self.df.columns:
-            self.df['SEX_ENCODED'] = (self.df['SEX'] == 'M').astype(int)
+            self.df.loc[:, 'SEX_ENCODED'] = (self.df['SEX'] == 'M').astype(int)
         
         # Define feature columns
         self.feature_columns = [
@@ -48,28 +48,26 @@ class CaloriePredictor:
         return self.df
     
     def train_model(self):
-        """Train the LightGBM model with proper imputation timing"""
+        # Chose LightGBM because it's a fast, efficient, and accurate model for regression tasks.
         print("\nTraining model...")
-        
-        # Update dataframe reference
-        self.df = self.data_manager.df
         
         # Prepare features and target
         X = self.df[self.feature_columns].copy()
         y = self.df['CALORIES']
         
-        # Split data FIRST (before imputation to avoid data leakage)
+        # Split data first, before imputation to avoid data leakage
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
         
-        # Clean gender encoding (standardize F/f and M/m)
+        # Clean gender encoding and standardize F/f and M/m
         if 'SEX' in X_train.columns:
             X_train['SEX'] = X_train['SEX'].str.upper()
             X_test['SEX'] = X_test['SEX'].str.upper()
         
-        # Handle missing values using ONLY training data (imputation after split)
+        # Handle missing values using ONLY training data 
         print("Handling missing values using training data only...")
         
         # Calculate demographic-specific imputation values from training data
+        # Using a dictionary to store the imputation values makes it easy to apply later using their key
         demographic_imputation = {}
         
         if 'SEX' in X_train.columns:
@@ -123,16 +121,16 @@ class CaloriePredictor:
                     X_train[col] = X_train[col].fillna(impute_value)
                     X_test[col] = X_test[col].fillna(impute_value)
         
-        # Train model
+        # Train model, use random_state to ensure reproducibility
         self.model = lgb.LGBMRegressor(random_state=42, verbose=-1)
         self.model.fit(X_train, y_train)
         
         # Evaluate
         y_pred = self.model.predict(X_test)
-        mae = mean_absolute_error(y_test, y_pred)
-        r2 = r2_score(y_test, y_pred)
+        mae = mean_absolute_error(y_test, y_pred) # Mean Absolute Error, the average of the absolute errors, lower is better
+        r2 = r2_score(y_test, y_pred) # R-squared score, predicts how much more accurate the model is than the mean of the target variable, higher is better
         
-        # Cross-validation
+        # Cross-validation, use a rotating 5-fold subset
         cv_scores = cross_val_score(self.model, X_train, y_train, cv=5, scoring='neg_mean_absolute_error')
         cv_mae = -cv_scores.mean()
         cv_std = cv_scores.std()
@@ -159,7 +157,7 @@ class CaloriePredictor:
         for i, row in importance.iterrows():
             print(f"  {row['feature']:<20}: {row['importance']:.3f}")
         
-        # Create feature importance visualization so the scale of importance is easily visible
+        # Create feature importance bar chart so the scale of importance is easily visible
         plt.figure(figsize=(10, 6))
         plt.barh(importance['feature'], importance['importance'])
         plt.xlabel('Feature Importance')
@@ -273,5 +271,5 @@ class CaloriePredictor:
         return predict_calories
     
     def update_data(self):
-        """Update the dataframe reference after data changes"""
+        # Update the dataframe reference after data changes
         self.df = self.data_manager.df
