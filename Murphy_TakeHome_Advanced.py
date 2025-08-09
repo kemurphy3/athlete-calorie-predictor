@@ -1,6 +1,12 @@
 # Enhanced Calorie Prediction Analysis
 # Addressing feedback: Multiple models, cross-validation, full dataset, business impact
 # Based on original work by Kate Murphy
+#
+# BUSINESS CONTEXT:
+# This model predicts calorie burn for planned runs to help athletes optimize their training.
+# Target users: Recreational runners who want to estimate calorie expenditure before workouts.
+# Success metric: Mean Absolute Error (MAE) - how close predictions are to actual calorie burn.
+# Business value: Helps users plan nutrition and training intensity more effectively.
 
 import pandas as pd
 import numpy as np
@@ -14,14 +20,57 @@ import lightgbm as lgb
 import xgboost as xgb
 import pickle
 import os
+import warnings
+import logging
+from datetime import datetime
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('calorie_prediction.log'),
+        logging.StreamHandler()
+    ]
+)
+warnings.filterwarnings('ignore')
+
+# Configuration
+CONFIG = {
+    'test_size': 0.2,
+    'random_state': 42,
+    'cv_folds': 5,
+    'model_filename': 'calorie_prediction_model_enhanced.pkl'
+}
 
 def load_and_clean_data(filepath, sample_size=None):
     """
     Load and clean the workout data using the full dataset
     Important to understand the scale and distribution of missing values as this will inform the need to impute
+    
+    Args:
+        filepath (str): Path to the CSV file
+        sample_size (int, optional): Number of records to sample. If None, uses full dataset.
+    
+    Returns:
+        pd.DataFrame: Cleaned dataset
+    
+    Raises:
+        FileNotFoundError: If filepath doesn't exist
+        ValueError: If sample_size is negative
     """
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(f"Data file not found: {filepath}")
+    
+    if sample_size is not None and sample_size < 0:
+        raise ValueError("sample_size must be positive")
+    
     print("Loading data...")
-    df = pd.read_csv(filepath)
+    try:
+        df = pd.read_csv(filepath)
+    except Exception as e:
+        raise RuntimeError(f"Failed to load data: {e}")
+    
     df.columns = df.columns.str.upper()
     
     if sample_size:
@@ -224,7 +273,21 @@ def compare_models(X_train, y_train, feature_columns):
     Compare multiple models using cross-validation
     For this project, I will systematically compare multiple algorithms including Linear Regression, 
     Random Forest, XGBoost, and LightGBM to ensure we select the best performing model for the business case
+    
+    Args:
+        X_train (pd.DataFrame): Training features
+        y_train (pd.Series): Training target
+        feature_columns (list): List of feature column names
+    
+    Returns:
+        tuple: (results_dict, best_model_name)
     """
+    if len(X_train) == 0 or len(y_train) == 0:
+        raise ValueError("Training data cannot be empty")
+    
+    if len(X_train) != len(y_train):
+        raise ValueError("X_train and y_train must have the same length")
+    
     print("\nComparing multiple models...")
     
     # Define models to compare
@@ -239,11 +302,18 @@ def compare_models(X_train, y_train, feature_columns):
     results = {}
     print("\n++ Model Comparison Results ++")
     for name, model in models.items():
-        cv_scores = cross_val_score(model, X_train, y_train, cv=5, scoring='neg_mean_absolute_error')
-        mae = -cv_scores.mean()
-        mae_std = cv_scores.std()
-        results[name] = {'mae': mae, 'mae_std': mae_std, 'model': model}
-        print(f"{name:<20}: MAE = {mae:.1f} ± {mae_std:.1f} calories")
+        try:
+            cv_scores = cross_val_score(model, X_train, y_train, cv=5, scoring='neg_mean_absolute_error')
+            mae = -cv_scores.mean()
+            mae_std = cv_scores.std()
+            results[name] = {'mae': mae, 'mae_std': mae_std, 'model': model}
+            print(f"{name:<20}: MAE = {mae:.1f} ± {mae_std:.1f} calories")
+        except Exception as e:
+            print(f"Error with {name}: {e}")
+            continue
+    
+    if not results:
+        raise RuntimeError("No models were successfully trained")
     
     # Find best model
     best_model_name = min(results.keys(), key=lambda x: results[x]['mae'])
@@ -296,96 +366,147 @@ def show_feature_importance(model, feature_columns, model_name):
 def run_enhanced_analysis(filepath, sample_size=None):
     """
     Run the complete enhanced analysis
-    This enhanced version addresses all the feedback points while maintaining the same structure, tone, and approach
+    
+    This enhanced version addresses all the feedback points while maintaining the same structure, tone, and approach.
+    
+    BUSINESS CONTEXT:
+    - Target: Recreational runners planning workouts
+    - Problem: Need to estimate calorie burn before running
+    - Solution: ML model that predicts calories based on workout parameters
+    - Success: Low MAE across all calorie ranges (especially 300-1000 range where most users fall)
+    
+    TECHNICAL APPROACH:
+    - Multiple model comparison (Linear, Random Forest, LightGBM, XGBoost)
+    - 5-fold cross-validation for robust evaluation
+    - Full dataset usage (no subsampling)
+    - Business impact analysis by calorie ranges
+    - Proper data leakage prevention
+    
+    Args:
+        filepath (str): Path to the workout data CSV file
+        sample_size (int, optional): Number of records to sample. If None, uses full dataset.
+    
+    Returns:
+        dict: Analysis results including model, metrics, and feature importance
+    
+    Raises:
+        FileNotFoundError: If data file doesn't exist
+        ValueError: If data is invalid
+        RuntimeError: If model training fails
     """
     print("=== Enhanced Calorie Prediction Analysis ===")
     print("Addressing feedback: Multiple models, cross-validation, full dataset, business impact\n")
     
-    # Load and clean data
-    df = load_and_clean_data(filepath, sample_size)
-    
-    # Analyze athlete distribution
-    analyze_athlete_distribution(df)
-    
-    # Create features
-    df, feature_columns = create_features(df)
-    
-    # Prepare data for modeling
-    X = df[feature_columns].copy()
-    y = df['CALORIES']
-    
-    # Split data first, before imputation to avoid data leakage
-    # Doing this split prior to data manipulation is crucial in preventing data leakage
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    
-    # Handle missing values
-    X_train, X_test = handle_missing_values(X_train, X_test)
-    
-    # Compare multiple models
-    results, best_model_name = compare_models(X_train, y_train, feature_columns)
-    
-    # Train best model on full training set
-    best_model = results[best_model_name]['model']
-    best_model.fit(X_train, y_train)
-    
-    # Evaluate on test set
-    y_pred = best_model.predict(X_test)
-    mae = mean_absolute_error(y_test, y_pred)
-    r2 = r2_score(y_test, y_pred)
-    
-    print(f"\nFinal Model Performance ({best_model_name}):")
-    print(f"  MAE: {mae:.1f} calories")
-    print(f"  R²: {r2:.3f}")
-    
-    # Analyze business impact
-    analyze_business_impact(y_test, y_pred)
-    
-    # Show feature importance
-    importance = show_feature_importance(best_model, feature_columns, best_model_name)
-    
-    # Save model
-    model_filename = 'calorie_prediction_model_enhanced.pkl'
-    model_data = {
-        'model': best_model,
-        'model_name': best_model_name,
-        'feature_columns': feature_columns,
-        'training_data_stats': {
-            'total_records': len(df),
-            'feature_count': len(feature_columns)
+    try:
+        # Load and clean data
+        df = load_and_clean_data(filepath, sample_size)
+        
+        # Analyze athlete distribution
+        analyze_athlete_distribution(df)
+        
+        # Create features
+        df, feature_columns = create_features(df)
+        
+        # Prepare data for modeling
+        X = df[feature_columns].copy()
+        y = df['CALORIES']
+        
+        if len(X) == 0:
+            raise ValueError("No valid data remaining after cleaning")
+        
+        # Split data first, before imputation to avoid data leakage
+        # Doing this split prior to data manipulation is crucial in preventing data leakage
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        
+        # Handle missing values
+        X_train, X_test = handle_missing_values(X_train, X_test)
+        
+        # Compare multiple models
+        results, best_model_name = compare_models(X_train, y_train, feature_columns)
+        
+        # Train best model on full training set
+        best_model = results[best_model_name]['model']
+        best_model.fit(X_train, y_train)
+        
+        # Evaluate on test set
+        y_pred = best_model.predict(X_test)
+        mae = mean_absolute_error(y_test, y_pred)
+        r2 = r2_score(y_test, y_pred)
+        
+        print(f"\nFinal Model Performance ({best_model_name}):")
+        print(f"  MAE: {mae:.1f} calories")
+        print(f"  R²: {r2:.3f}")
+        
+        # Analyze business impact
+        analyze_business_impact(y_test, y_pred)
+        
+        # Show feature importance
+        importance = show_feature_importance(best_model, feature_columns, best_model_name)
+        
+        # Save model
+        model_filename = 'calorie_prediction_model_enhanced.pkl'
+        model_data = {
+            'model': best_model,
+            'model_name': best_model_name,
+            'feature_columns': feature_columns,
+            'training_data_stats': {
+                'total_records': len(df),
+                'feature_count': len(feature_columns),
+                'mae': mae,
+                'r2': r2
+            }
         }
-    }
-    
-    with open(model_filename, 'wb') as f:
-        pickle.dump(model_data, f)
-    
-    print(f"\nModel saved to {model_filename}")
-    
-    return {
-        'model': best_model,
-        'model_name': best_model_name,
-        'feature_columns': feature_columns,
-        'mae': mae,
-        'r2': r2,
-        'importance': importance,
-        'results': results
-    }
+        
+        with open(model_filename, 'wb') as f:
+            pickle.dump(model_data, f)
+        
+        print(f"\nModel saved to {model_filename}")
+        
+        return {
+            'model': best_model,
+            'model_name': best_model_name,
+            'feature_columns': feature_columns,
+            'mae': mae,
+            'r2': r2,
+            'importance': importance,
+            'results': results
+        }
+        
+    except Exception as e:
+        print(f"\nError during analysis: {e}")
+        raise
 
 def predict_calories(model_data, input_data):
     """
     Predict calories for new data using the trained model
     Cursor wrote the prediction function, which applied the developed model
+    
+    Args:
+        model_data (dict): Model data loaded from pickle file
+        input_data (pd.DataFrame): Input data with required features
+    
+    Returns:
+        np.array: Predicted calorie values
+    
+    Raises:
+        ValueError: If required features are missing
     """
+    if not isinstance(model_data, dict) or 'model' not in model_data:
+        raise ValueError("model_data must be a dictionary with 'model' key")
+    
     model = model_data['model']
     feature_columns = model_data['feature_columns']
     
     # Ensure input data has the same features
+    missing_features = [col for col in feature_columns if col not in input_data.columns]
+    if missing_features:
+        raise ValueError(f"Missing required features: {missing_features}")
+    
     input_features = input_data[feature_columns].copy()
     
     # Handle missing values if any
     for col in feature_columns:
-        if col not in input_features.columns:
-            input_features[col] = 0  # Default value
-        elif input_features[col].isnull().any():
+        if input_features[col].isnull().any():
             input_features[col] = input_features[col].fillna(input_features[col].median())
     
     # Make prediction
@@ -393,19 +514,54 @@ def predict_calories(model_data, input_data):
     return prediction
 
 if __name__ == "__main__":
-    # Run the enhanced analysis
-    results = run_enhanced_analysis("workout_data.csv")
+    """
+    Example usage of the enhanced calorie prediction analysis.
     
-    print("\n=== Analysis Complete ===")
-    print(f"Best model: {results['model_name']}")
-    print(f"Final MAE: {results['mae']:.1f} calories")
-    print(f"Final R²: {results['r2']:.3f}")
+    This script demonstrates:
+    1. Loading and cleaning workout data
+    2. Comparing multiple ML models using cross-validation
+    3. Training the best model on the full dataset
+    4. Analyzing business impact across calorie ranges
+    5. Saving the model for future use
+    """
     
-    # Example of how to use the model for predictions
-    print("\n=== Example Usage ===")
+    # Example 1: Run analysis on full dataset
+    print("=== Example 1: Full Dataset Analysis ===")
+    try:
+        results = run_enhanced_analysis("workout_data.csv")
+        
+        print("\n=== Analysis Complete ===")
+        print(f"Best model: {results['model_name']}")
+        print(f"Final MAE: {results['mae']:.1f} calories")
+        print(f"Final R²: {results['r2']:.3f}")
+        
+    except FileNotFoundError:
+        print("workout_data.csv not found. Please ensure the data file is in the current directory.")
+    except Exception as e:
+        print(f"Analysis failed: {e}")
+    
+    # Example 2: Run analysis on sample data (for testing)
+    print("\n=== Example 2: Sample Data Analysis ===")
+    try:
+        sample_results = run_enhanced_analysis("workout_data.csv", sample_size=10000)
+        print(f"Sample analysis completed with {sample_results['mae']:.1f} MAE")
+    except Exception as e:
+        print(f"Sample analysis failed: {e}")
+    
+    # Example 3: How to use the saved model
+    print("\n=== Example 3: Model Usage ===")
     print("To make predictions on new data:")
     print("1. Load the saved model:")
     print("   with open('calorie_prediction_model_enhanced.pkl', 'rb') as f:")
     print("       model_data = pickle.load(f)")
     print("2. Prepare your input data with the same features")
-    print("3. Call predict_calories(model_data, input_data)") 
+    print("3. Call predict_calories(model_data, input_data)")
+    
+    # Example 4: Business context summary
+    print("\n=== Business Context Summary ===")
+    print("This model helps recreational runners estimate calorie burn before workouts.")
+    print("Key benefits:")
+    print("- Plan nutrition more effectively")
+    print("- Optimize training intensity")
+    print("- Track progress over time")
+    print("- Make informed workout decisions") 
