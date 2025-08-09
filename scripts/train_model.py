@@ -676,20 +676,12 @@ def predict_calories(model_data, input_data):
     prediction = model.predict(input_features)
     return prediction
 
-if __name__ == "__main__":
+def main():
     """
-    Example usage of the enhanced calorie prediction analysis.
+    Main function for the calorie prediction training script.
     
-    This script demonstrates:
-    1. Loading and cleaning workout data
-    2. Comparing multiple ML models using cross-validation
-    3. Training the best model on the full dataset
-    4. Analyzing business impact across calorie ranges
-    5. Saving the model for future use
-    
-    Parallel processing is automatically enabled for optimal performance.
+    This function can be called from the command line or as an entry point.
     """
-    
     import sys
     
     # Check for quick test mode
@@ -724,11 +716,11 @@ if __name__ == "__main__":
     except FileNotFoundError:
         print("workout_data.csv not found. Please ensure the data file is in the current directory.")
         print("\nTo run a quick test with sample data:")
-        print("python Murphy_TakeHome_Advanced.py --quick")
+        print("python scripts/train_model.py --quick")
     except Exception as e:
         print(f"Analysis failed: {e}")
         print("\nTry running with --quick flag for faster testing:")
-        print("python Murphy_TakeHome_Advanced.py --quick")
+        print("python scripts/train_model.py --quick")
     
     # Example 2: How to use the saved model
     print("\n=== Model Usage ===")
@@ -742,7 +734,23 @@ if __name__ == "__main__":
     # Example 3: Performance tips
     print("\n=== Performance Tips ===")
     print("For faster processing:")
-    print("- Use --quick flag for testing: python Murphy_TakeHome_Advanced.py --quick")
-    print("- Disable parallel processing: python Murphy_TakeHome_Advanced.py --no-parallel")
-    print("- Skip Random Forest: python Murphy_TakeHome_Advanced.py --skip-rf")
-    print("- Ensure sufficient RAM (8GB+ recommended for full dataset)") 
+    print("- Use --quick flag for testing: python scripts/train_model.py --quick")
+    print("- Disable parallel processing: python scripts/train_model.py --no-parallel")
+    print("- Skip Random Forest: python scripts/train_model.py --skip-rf")
+    print("- Ensure sufficient RAM (8GB+ recommended for full dataset)")
+
+
+if __name__ == "__main__":
+    """
+    Example usage of the enhanced calorie prediction analysis.
+    
+    This script demonstrates:
+    1. Loading and cleaning workout data
+    2. Comparing multiple ML models using cross-validation
+    3. Training the best model on the full dataset
+    4. Analyzing business impact across calorie ranges
+    5. Saving the model for future use
+    
+    Parallel processing is automatically enabled for optimal performance.
+    """
+    main() 

@@ -129,7 +129,7 @@ Next I'd select a model. For this project, I will systematically compare multipl
 
 ## Files Created
 
-1. **`Murphy_TakeHome_Advanced.py`** - Complete enhanced analysis script
+1. **`scripts/train_model.py`** - Complete enhanced analysis script
 2. **`ENHANCED_ANALYSIS_SUMMARY.md`** - This summary document
 
 ## Expected Output
