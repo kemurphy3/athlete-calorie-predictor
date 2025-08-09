@@ -33,11 +33,11 @@ This project implements a machine learning solution to predict calorie burn for 
 
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/kemurphy3/calorie_predictor.git
 cd calorie_predictor
 
 # Install required packages
-pip install pandas numpy matplotlib seaborn scikit-learn lightgbm xgboost
+pip install -r requirements.txt
 ```
 
 ## Usage
@@ -45,7 +45,7 @@ pip install pandas numpy matplotlib seaborn scikit-learn lightgbm xgboost
 ### Basic Usage
 
 ```python
-from Murphy_TakeHome_Advanced import run_enhanced_analysis
+from scripts.train_model import run_enhanced_analysis
 
 # Run analysis on full dataset
 results = run_enhanced_analysis("workout_data.csv")
@@ -66,10 +66,10 @@ sample_results = run_enhanced_analysis("workout_data.csv", sample_size=10000)
 
 ```python
 import pickle
-from Murphy_TakeHome_Advanced import predict_calories
+import pandas as pd
 
 # Load the saved model
-with open('calorie_prediction_model_enhanced.pkl', 'rb') as f:
+with open('models/calorie_prediction_model.pkl', 'rb') as f:
     model_data = pickle.load(f)
 
 # Prepare input data (must have same features as training data)
@@ -85,7 +85,7 @@ input_data = pd.DataFrame({
 })
 
 # Make prediction
-predicted_calories = predict_calories(model_data, input_data)
+predicted_calories = model_data['model'].predict(input_data)
 print(f"Predicted calories: {predicted_calories[0]:.0f}")
 ```
 
@@ -125,11 +125,19 @@ The model expects the following features:
 
 ```
 calorie_predictor/
-├── Murphy_TakeHome_Advanced.py    # Main analysis script
-├── README.md                      # This file
-├── workout_data.csv              # Input data (not included)
-├── calorie_prediction_model_enhanced.pkl  # Saved model (generated)
-└── ENHANCED_ANALYSIS_SUMMARY.md  # Detailed analysis summary
+├── src/                              # Source code
+│   ├── models/                       # Model implementations
+│   ├── data/                         # Data processing utilities
+│   └── visualization/                # Visualization functions
+├── scripts/                          # Training and utility scripts
+├── tests/                            # Unit tests
+├── data/                             # Data files
+├── models/                           # Saved models
+├── notebooks/                        # Jupyter notebooks
+├── requirements.txt                  # Python dependencies
+├── setup.py                          # Package setup
+├── README.md                         # This file
+└── LICENSE                           # MIT License
 ```
 
 ## Technical Details
@@ -170,7 +178,7 @@ The script includes comprehensive error handling:
 
 ## License
 
-This project is for educational and portfolio purposes.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Contact
 
