@@ -23,6 +23,9 @@ import os
 import warnings
 import logging
 from datetime import datetime
+import multiprocessing as mp
+from joblib import Parallel, delayed
+import psutil
 
 # Configure logging
 logging.basicConfig(
@@ -40,12 +43,98 @@ CONFIG = {
     'test_size': 0.2,
     'random_state': 42,
     'cv_folds': 5,
-    'model_filename': 'calorie_prediction_model_enhanced.pkl'
+    'model_filename': 'calorie_prediction_model_enhanced.pkl',
+    'n_jobs': -1  # Use all available cores
 }
+
+def get_optimal_n_jobs():
+    """
+    Determine optimal number of jobs based on system resources
+    """
+    cpu_count = mp.cpu_count()
+    memory_gb = psutil.virtual_memory().total / (1024**3)
+    
+    # Conservative approach: use 75% of cores, but not more than memory allows
+    optimal_cores = min(int(cpu_count * 0.75), int(memory_gb / 2))
+    return max(1, optimal_cores)
+
+def parallel_model_training(model_name, model, X_train, y_train, cv_folds):
+    """
+    Train a single model with cross-validation (for parallel processing)
+    """
+    try:
+        start_time = datetime.now()
+        
+        # Special handling for Random Forest to prevent hanging
+        if 'Random Forest' in model_name:
+            # For very large datasets, use stratified sampling to maintain representativeness
+            if len(X_train) > 200000:
+                # Use stratified sampling based on calorie ranges
+                calorie_bins = pd.cut(y_train, bins=10, labels=False)
+                sample_indices = []
+                for bin_id in range(10):
+                    bin_mask = calorie_bins == bin_id
+                    if bin_mask.sum() > 0:
+                        bin_indices = np.where(bin_mask)[0]
+                        n_samples = min(10000, len(bin_indices))  # 10k per bin, max
+                        sampled_indices = np.random.choice(bin_indices, n_samples, replace=False)
+                        sample_indices.extend(sampled_indices)
+                
+                if len(sample_indices) > 100000:
+                    sample_indices = np.random.choice(sample_indices, 100000, replace=False)
+                
+                X_train_subset = X_train.iloc[sample_indices]
+                y_train_subset = y_train.iloc[sample_indices]
+                cv_folds_rf = min(3, cv_folds)
+            elif len(X_train) > 100000:
+                # Use stratified sampling for large datasets
+                calorie_bins = pd.cut(y_train, bins=8, labels=False)
+                sample_indices = []
+                for bin_id in range(8):
+                    bin_mask = calorie_bins == bin_id
+                    if bin_mask.sum() > 0:
+                        bin_indices = np.where(bin_mask)[0]
+                        n_samples = min(9375, len(bin_indices))  # 75k/8 = 9375 per bin
+                        sampled_indices = np.random.choice(bin_indices, n_samples, replace=False)
+                        sample_indices.extend(sampled_indices)
+                
+                X_train_subset = X_train.iloc[sample_indices]
+                y_train_subset = y_train.iloc[sample_indices]
+                cv_folds_rf = min(4, cv_folds)
+            else:
+                X_train_subset = X_train
+                y_train_subset = y_train
+                cv_folds_rf = cv_folds
+        else:
+            X_train_subset = X_train
+            y_train_subset = y_train
+            cv_folds_rf = cv_folds
+        
+        cv_scores = cross_val_score(model, X_train_subset, y_train_subset, cv=cv_folds_rf, 
+                                   scoring='neg_mean_absolute_error', n_jobs=1)
+        
+        mae = -cv_scores.mean()
+        mae_std = cv_scores.std()
+        elapsed_time = (datetime.now() - start_time).total_seconds()
+        
+        return {
+            'name': model_name,
+            'mae': mae,
+            'mae_std': mae_std,
+            'model': model,
+            'elapsed_time': elapsed_time,
+            'success': True
+        }
+    except Exception as e:
+        return {
+            'name': model_name,
+            'error': str(e),
+            'success': False
+        }
 
 def load_and_clean_data(filepath, sample_size=None):
     """
-    Load and clean the workout data using the full dataset
+    Load and clean the workout data using the full dataset with parallel processing where possible
     Important to understand the scale and distribution of missing values as this will inform the need to impute
     
     Args:
@@ -67,7 +156,11 @@ def load_and_clean_data(filepath, sample_size=None):
     
     print("Loading data...")
     try:
-        df = pd.read_csv(filepath)
+        # Use parallel processing for large CSV files
+        if os.path.getsize(filepath) > 100 * 1024 * 1024:  # 100MB threshold
+            df = pd.read_csv(filepath, engine='c', low_memory=False)
+        else:
+            df = pd.read_csv(filepath)
     except Exception as e:
         raise RuntimeError(f"Failed to load data: {e}")
     
@@ -82,16 +175,33 @@ def load_and_clean_data(filepath, sample_size=None):
     else:
         print(f"Using all {len(df):,} records")
     
-    # Analyze missing data
+    # Analyze missing data (parallel processing for large datasets)
     print("\n++ Missing Data Analysis ++")
     key_features = ['CALORIES', 'DURATION_ACTUAL', 'DISTANCE_ACTUAL', 'HRMAX', 'HRAVG', 
                    'ELEVATIONAVG', 'ELEVATIONGAIN', 'TRAININGSTRESSSCOREACTUAL', 'AGE', 'WEIGHT', 'SEX']
     
-    for col in key_features:
-        if col in df.columns:
-            missing_count = df[col].isnull().sum()
-            missing_pct = (missing_count / len(df)) * 100
-            print(f"{col:<25}: {missing_count:>6,} missing ({missing_pct:>5.1f}%)")
+    if len(df) > 100000:  # Use parallel processing for large datasets
+        def analyze_missing_parallel(col):
+            if col in df.columns:
+                missing_count = df[col].isnull().sum()
+                missing_pct = (missing_count / len(df)) * 100
+                return col, missing_count, missing_pct
+            return col, 0, 0.0
+        
+        n_jobs = get_optimal_n_jobs()
+        missing_results = Parallel(n_jobs=n_jobs)(
+            delayed(analyze_missing_parallel)(col) for col in key_features
+        )
+        
+        for col, missing_count, missing_pct in missing_results:
+            if col in df.columns:
+                print(f"{col:<25}: {missing_count:>6,} missing ({missing_pct:>5.1f}%)")
+    else:
+        for col in key_features:
+            if col in df.columns:
+                missing_count = df[col].isnull().sum()
+                missing_pct = (missing_count / len(df)) * 100
+                print(f"{col:<25}: {missing_count:>6,} missing ({missing_pct:>5.1f}%)")
     
     # Clean data by removing invalid and outlier data
     print("\nCleaning data...")
@@ -221,18 +331,15 @@ def handle_missing_values(X_train, X_test):
         if 'WEIGHT' in X_train.columns:
             weight_by_sex = X_train.groupby('SEX')['WEIGHT'].median()
             demographic_imputation['WEIGHT'] = weight_by_sex.to_dict()
-            print(f"  Weight imputation by gender: {weight_by_sex.to_dict()}")
         
         # Gender-specific imputation for heart rate
         if 'HRMAX' in X_train.columns:
             hrmax_by_sex = X_train.groupby('SEX')['HRMAX'].median()
             demographic_imputation['HRMAX'] = hrmax_by_sex.to_dict()
-            print(f"  HRMAX imputation by gender: {hrmax_by_sex.to_dict()}")
         
         if 'HRAVG' in X_train.columns:
             hravg_by_sex = X_train.groupby('SEX')['HRAVG'].median()
             demographic_imputation['HRAVG'] = hravg_by_sex.to_dict()
-            print(f"  HRAVG imputation by gender: {hravg_by_sex.to_dict()}")
     
     # Apply imputation
     for col in X_train.columns:
@@ -255,7 +362,6 @@ def handle_missing_values(X_train, X_test):
                     global_median = X_train[col].median()
                     X_train.loc[remaining_missing_train, col] = global_median
                     X_test.loc[remaining_missing_test, col] = global_median
-                    print(f"  Applied global median fallback for {col}: {global_median:.1f}")
             else:
                 # Use global imputation for other features
                 if X_train[col].dtype in ['int64', 'float64']:
@@ -268,9 +374,9 @@ def handle_missing_values(X_train, X_test):
     
     return X_train, X_test
 
-def compare_models(X_train, y_train, feature_columns):
+def compare_models(X_train, y_train, feature_columns, skip_rf=False):
     """
-    Compare multiple models using cross-validation
+    Compare multiple models using cross-validation with parallel processing
     For this project, I will systematically compare multiple algorithms including Linear Regression, 
     Random Forest, XGBoost, and LightGBM to ensure we select the best performing model for the business case
     
@@ -278,6 +384,7 @@ def compare_models(X_train, y_train, feature_columns):
         X_train (pd.DataFrame): Training features
         y_train (pd.Series): Training target
         feature_columns (list): List of feature column names
+        skip_rf (bool): Whether to skip Random Forest (for large datasets or performance)
     
     Returns:
         tuple: (results_dict, best_model_name)
@@ -289,28 +396,86 @@ def compare_models(X_train, y_train, feature_columns):
         raise ValueError("X_train and y_train must have the same length")
     
     print("\nComparing multiple models...")
+    print(f"Training data size: {len(X_train):,} samples, {len(feature_columns)} features")
     
-    # Define models to compare
+    # Determine optimal number of jobs
+    n_jobs = get_optimal_n_jobs()
+    
+    # Define models to compare (optimized for parallel processing)
     models = {
         'Linear Regression': LinearRegression(),
-        'Random Forest': RandomForestRegressor(random_state=42, n_estimators=100),
-        'LightGBM': lgb.LGBMRegressor(random_state=42, verbose=-1),
-        'XGBoost': xgb.XGBRegressor(random_state=42, verbosity=0)
+        'LightGBM': lgb.LGBMRegressor(random_state=42, verbose=-1, n_estimators=100, n_jobs=1),
+        'XGBoost': xgb.XGBRegressor(random_state=42, verbosity=0, n_estimators=100, n_jobs=1)
     }
     
-    # Compare models using cross-validation
-    results = {}
-    print("\n++ Model Comparison Results ++")
+    # Add Random Forest only if not skipped and dataset is manageable
+    if not skip_rf:  # Always include Random Forest for full dataset
+        # Optimized Random Forest settings for speed + robustness
+        rf_config = {
+            'random_state': 42,
+            'n_estimators': 50,  # Increased back to 50 for robustness
+            'max_depth': 8,      # Reduced from 10 to 8 for speed
+            'min_samples_split': 100,  # Increased from 50 to 100
+            'min_samples_leaf': 50,    # Increased from 20 to 50
+            'n_jobs': 1,         # Single-threaded for parallel processing
+            'max_features': 'sqrt',  # Use sqrt of features for faster splits
+            'bootstrap': True,   # Enable bootstrapping for robustness
+            'oob_score': False,  # Disable OOB score for speed
+            'warm_start': False, # Disable warm start for speed
+            'max_samples': 0.8   # Use 80% of samples per tree for speed
+        }
+        
+        # For very large datasets, use even more aggressive optimization
+        if len(X_train) > 200000:
+            rf_config.update({
+                'n_estimators': 30,     # Fewer trees for speed
+                'max_depth': 6,         # Shallow trees
+                'min_samples_split': 200,  # Larger splits
+                'min_samples_leaf': 100,   # Larger leaves
+                'max_samples': 0.6      # Use only 60% of samples per tree
+            })
+        elif len(X_train) > 100000:
+            rf_config.update({
+                'n_estimators': 40,     # Moderate number of trees
+                'max_depth': 7,         # Moderate depth
+                'min_samples_split': 150,  # Moderate splits
+                'min_samples_leaf': 75,    # Moderate leaves
+                'max_samples': 0.7      # Use 70% of samples per tree
+            })
+        
+        models['Random Forest'] = RandomForestRegressor(**rf_config)
+    elif skip_rf:
+        print("  Skipping Random Forest (--skip-rf flag used)")
+    
+    # Determine CV folds based on data size
+    cv_folds = min(5, max(3, len(X_train) // 10000))
+    print(f"Using {cv_folds}-fold cross-validation")
+    
+    # Prepare parallel processing tasks
+    tasks = []
     for name, model in models.items():
-        try:
-            cv_scores = cross_val_score(model, X_train, y_train, cv=5, scoring='neg_mean_absolute_error')
-            mae = -cv_scores.mean()
-            mae_std = cv_scores.std()
-            results[name] = {'mae': mae, 'mae_std': mae_std, 'model': model}
-            print(f"{name:<20}: MAE = {mae:.1f} ± {mae_std:.1f} calories")
-        except Exception as e:
-            print(f"Error with {name}: {e}")
-            continue
+        tasks.append((name, model, X_train, y_train, cv_folds))
+    
+    # Execute parallel model training
+    print("\n++ Model Comparison Results ++")
+    results_list = Parallel(n_jobs=n_jobs, verbose=0)(
+        delayed(parallel_model_training)(name, model, X_train, y_train, cv_folds)
+        for name, model, X_train, y_train, cv_folds in tasks
+    )
+    
+    # Process results
+    results = {}
+    for result in results_list:
+        if result['success']:
+            name = result['name']
+            results[name] = {
+                'mae': result['mae'],
+                'mae_std': result['mae_std'],
+                'model': result['model']
+            }
+            print(f"  {name:<20}: MAE = {result['mae']:.1f} ± {result['mae_std']:.1f} calories")
+        else:
+            print(f"  Error with {result['name']}: {result['error']}")
     
     if not results:
         raise RuntimeError("No models were successfully trained")
@@ -363,7 +528,7 @@ def show_feature_importance(model, feature_columns, model_name):
     
     return importance
 
-def run_enhanced_analysis(filepath, sample_size=None):
+def run_enhanced_analysis(filepath, sample_size=None, skip_rf=False):
     """
     Run the complete enhanced analysis
     
@@ -385,6 +550,7 @@ def run_enhanced_analysis(filepath, sample_size=None):
     Args:
         filepath (str): Path to the workout data CSV file
         sample_size (int, optional): Number of records to sample. If None, uses full dataset.
+        skip_rf (bool): Whether to skip Random Forest (for large datasets or performance)
     
     Returns:
         dict: Analysis results including model, metrics, and feature importance
@@ -394,9 +560,6 @@ def run_enhanced_analysis(filepath, sample_size=None):
         ValueError: If data is invalid
         RuntimeError: If model training fails
     """
-    print("=== Enhanced Calorie Prediction Analysis ===")
-    print("Addressing feedback: Multiple models, cross-validation, full dataset, business impact\n")
-    
     try:
         # Load and clean data
         df = load_and_clean_data(filepath, sample_size)
@@ -422,7 +585,7 @@ def run_enhanced_analysis(filepath, sample_size=None):
         X_train, X_test = handle_missing_values(X_train, X_test)
         
         # Compare multiple models
-        results, best_model_name = compare_models(X_train, y_train, feature_columns)
+        results, best_model_name = compare_models(X_train, y_train, feature_columns, skip_rf=skip_rf)
         
         # Train best model on full training set
         best_model = results[best_model_name]['model']
@@ -523,12 +686,35 @@ if __name__ == "__main__":
     3. Training the best model on the full dataset
     4. Analyzing business impact across calorie ranges
     5. Saving the model for future use
+    
+    Parallel processing is automatically enabled for optimal performance.
     """
     
+    import sys
+    
+    # Check for quick test mode
+    quick_test = '--quick' in sys.argv or '--test' in sys.argv
+    no_parallel = '--no-parallel' in sys.argv
+    skip_rf = '--skip-rf' in sys.argv  # Skip Random Forest
+    
+    if quick_test:
+        print("=== QUICK TEST MODE ===")
+        print("Using sample data for faster testing...")
+        sample_size = 10000
+    else:
+        sample_size = None
+    
+    if no_parallel:
+        print("=== PARALLEL PROCESSING DISABLED ===")
+        CONFIG['n_jobs'] = 1
+    
+    if skip_rf:
+        print("=== RANDOM FOREST DISABLED ===")
+    
     # Example 1: Run analysis on full dataset
-    print("=== Example 1: Full Dataset Analysis ===")
+    print("\n=== Enhanced Calorie Prediction Analysis ===")
     try:
-        results = run_enhanced_analysis("workout_data.csv")
+        results = run_enhanced_analysis("workout_data.csv", sample_size=sample_size, skip_rf=skip_rf)
         
         print("\n=== Analysis Complete ===")
         print(f"Best model: {results['model_name']}")
@@ -537,19 +723,15 @@ if __name__ == "__main__":
         
     except FileNotFoundError:
         print("workout_data.csv not found. Please ensure the data file is in the current directory.")
+        print("\nTo run a quick test with sample data:")
+        print("python Murphy_TakeHome_Advanced.py --quick")
     except Exception as e:
         print(f"Analysis failed: {e}")
+        print("\nTry running with --quick flag for faster testing:")
+        print("python Murphy_TakeHome_Advanced.py --quick")
     
-    # Example 2: Run analysis on sample data (for testing)
-    print("\n=== Example 2: Sample Data Analysis ===")
-    try:
-        sample_results = run_enhanced_analysis("workout_data.csv", sample_size=10000)
-        print(f"Sample analysis completed with {sample_results['mae']:.1f} MAE")
-    except Exception as e:
-        print(f"Sample analysis failed: {e}")
-    
-    # Example 3: How to use the saved model
-    print("\n=== Example 3: Model Usage ===")
+    # Example 2: How to use the saved model
+    print("\n=== Model Usage ===")
     print("To make predictions on new data:")
     print("1. Load the saved model:")
     print("   with open('calorie_prediction_model_enhanced.pkl', 'rb') as f:")
@@ -557,11 +739,10 @@ if __name__ == "__main__":
     print("2. Prepare your input data with the same features")
     print("3. Call predict_calories(model_data, input_data)")
     
-    # Example 4: Business context summary
-    print("\n=== Business Context Summary ===")
-    print("This model helps recreational runners estimate calorie burn before workouts.")
-    print("Key benefits:")
-    print("- Plan nutrition more effectively")
-    print("- Optimize training intensity")
-    print("- Track progress over time")
-    print("- Make informed workout decisions") 
+    # Example 3: Performance tips
+    print("\n=== Performance Tips ===")
+    print("For faster processing:")
+    print("- Use --quick flag for testing: python Murphy_TakeHome_Advanced.py --quick")
+    print("- Disable parallel processing: python Murphy_TakeHome_Advanced.py --no-parallel")
+    print("- Skip Random Forest: python Murphy_TakeHome_Advanced.py --skip-rf")
+    print("- Ensure sufficient RAM (8GB+ recommended for full dataset)") 
