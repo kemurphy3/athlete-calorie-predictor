@@ -3,11 +3,11 @@
 ## ML System for Workout Optimization | 94% R² Accuracy on 500k Records
 
 ## Key Achievements
-- 🎯 **94% R² accuracy** on 500,000 workout records
-- 🔄 **Systematic comparison** of 4 ML models (Linear, RF, LightGBM, XGBoost)
-- 📊 **5-fold cross-validation** with business impact analysis
-- ⚡ **Parallel processing** for efficient model training
-- 💡 **Addresses all feedback** from technical assessment - demonstrates learning and improvement
+- **94% R² accuracy** on 500,000 workout records
+- **Systematic comparison** of 4 ML models (Linear, RF, LightGBM, XGBoost)
+- **5-fold cross-validation** with business impact analysis
+- **Parallel processing** for efficient model training
+- **Addresses all feedback** from technical assessment - demonstrates learning and improvement
 
 ## Overview
 

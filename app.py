@@ -13,12 +13,11 @@ import os
 # Page configuration
 st.set_page_config(
     page_title="Athletic Performance Optimizer",
-    page_icon="🏃",
     layout="wide"
 )
 
 # Title and description
-st.title("🏃 Athletic Performance Optimizer")
+st.title("Athletic Performance Optimizer")
 st.markdown("### ML System for Workout Optimization | 94% R² Accuracy")
 
 # Display key metrics in columns
@@ -126,19 +125,16 @@ with col1:
     if intensity_ratio > 0.85:
         calories = base_calories * 1.1
         workout_type = "High Intensity"
-        color = "🔴"
     elif intensity_ratio > 0.75:
         calories = base_calories
         workout_type = "Moderate Intensity"
-        color = "🟡"
     else:
         calories = base_calories * 0.95
         workout_type = "Low Intensity"
-        color = "🟢"
     
     # Display predictions
     st.metric("Predicted Calorie Burn", f"{calories:.0f} calories")
-    st.metric("Workout Classification", f"{color} {workout_type}")
+    st.metric("Workout Classification", workout_type)
     st.metric("Pace", f"{pace*60:.1f} min/km")
     
     # Model confidence based on workout parameters
@@ -213,9 +209,9 @@ with col1:
 
 with col2:
     st.markdown("### Links")
-    st.markdown("[📊 GitHub Repository](https://github.com/kemurphy3/athletic-performance-optimizer)")
-    st.markdown("[📧 Contact](mailto:kemurphy3@gmail.com)")
-    st.markdown("[💼 LinkedIn](https://www.linkedin.com/in/kate-murphy-356b9648/)")
+    st.markdown("[GitHub Repository](https://github.com/kemurphy3/athletic-performance-optimizer)")
+    st.markdown("[Contact](mailto:kemurphy3@gmail.com)")
+    st.markdown("[LinkedIn](https://www.linkedin.com/in/kate-murphy-356b9648/)")
 
 # Add a note about the demo
 st.info("**Note**: This demo uses simplified calculations. The actual model achieves 94% R² accuracy using LightGBM with 13 engineered features.")
