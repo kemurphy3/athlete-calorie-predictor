@@ -1,0 +1,77 @@
+================================================================================
+ATHLETE CALORIE PREDICTOR - MODEL REPORT
+================================================================================
+
+MODEL OVERVIEW
+MODEL OVERVIEW
+----------------------------------------
+Best Model: Gradient Boosting
+Training Records: 742
+Features: 8
+Cross-Validation Folds: 5
+
+TECHNICAL PERFORMANCE
+----------------------------------------
+R² Score: 0.826
+MAE: 15.6 calories
+RMSE: 27.4 calories
+MAE Percentage: 18.0%
+
+MODEL COMPARISON (Cross-Validation)
+----------------------------------------
+Linear Regression:
+  R² CV: 0.712 ± 0.038
+  MAE CV: 25.7 ± 2.8
+  RMSE CV: 37.3 ± 20.8
+
+Ridge Regression:
+  R² CV: 0.698 ± 0.052
+  MAE CV: 25.6 ± 2.7
+  RMSE CV: 38.3 ± 22.4
+
+Lasso Regression:
+  R² CV: 0.712 ± 0.038
+  MAE CV: 25.7 ± 2.8
+  RMSE CV: 37.3 ± 20.8
+
+Random Forest:
+  R² CV: 0.791 ± 0.052
+  MAE CV: 17.3 ± 2.5
+  RMSE CV: 31.4 ± 16.5
+
+Gradient Boosting:
+  R² CV: 0.791 ± 0.057
+  MAE CV: 16.7 ± 2.3
+  RMSE CV: 31.1 ± 14.7
+
+LightGBM:
+  R² CV: 0.778 ± 0.056
+  MAE CV: 18.5 ± 2.8
+  RMSE CV: 32.5 ± 18.0
+
+XGBoost:
+  R² CV: 0.792 ± 0.063
+  MAE CV: 16.8 ± 2.7
+  RMSE CV: 31.5 ± 18.8
+
+BUSINESS IMPACT ANALYSIS
+----------------------------------------
+        Category                  Description Calorie_Range  Sample_Count        MAE       RMSE  Error_Percentage  Mean_Calories
+    Easy Workout Light jog, walking, recovery         0-300           146  13.605549  22.112671         16.788456      81.041096
+Moderate Workout 5K-10K run, moderate cycling       300-600             3 110.513143 116.600353         30.669697     360.333333
+
+FEATURE LIST
+----------------------------------------
+ 1. DISTANCE_ACTUAL
+ 2. HRMAX
+ 3. HRAVG
+ 4. ELEVATIONGAIN
+ 5. AGE
+ 6. INTENSITY_RATIO
+ 7. HR_ZONE
+ 8. ELEVATION_PER_KM
+
+TRAINING SUMMARY
+----------------------------------------
+Model trained on authentic workout data with derived features.
+All features are mathematical transformations of existing physiological data.

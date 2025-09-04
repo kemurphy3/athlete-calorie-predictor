@@ -1,4 +1,4 @@
-# Athletic Performance Optimizer
+# Athlete Calorie Predictor
 
 ## ML System for Workout Optimization | 94% R² Accuracy on 500k Records
 
@@ -46,12 +46,130 @@ Production-ready machine learning system that optimizes athletic performance thr
 
 ```bash
 # Clone the repository
-git clone https://github.com/kemurphy3/calorie_predictor.git
-cd calorie_predictor
+git clone https://github.com/kemurphy3/athlete-calorie-predictor.git
+cd athlete-calorie-predictor
 
 # Install required packages
 pip install -r requirements.txt
+
+# Set up environment configuration (optional but recommended)
+cp config.env.example .env
+# Edit .env with your Strava API credentials and other settings
+
+# Or use the interactive setup script:
+python setup_env.py
+
+## Data Pipeline
+
+The project includes a comprehensive data pipeline (`pipelines/build_dataset.py`) that builds a unified workout dataset from multiple sources:
+
+### Data Sources
+- **Strava API**: Personal workout data with automatic token refresh
+- **UCI PAMAP2**: Physical Activity Monitoring dataset (aggregated to workout-level)
+- **Kaggle Fitbit**: Fitbit-style workout data (aggregated to workout-level)
+
+### Unified Schema
+All sources are standardized to these columns:
+- `workout_id`: Unique row identifier (string)
+- `source`: Data source ("STRAVA", "UCI_PAMAP2", "KAGGLE_FITBIT", "SYNTHETIC")
+- `athlete_id`: Athlete or subject identifier (string)
+- `activity_type`: Activity type (Run, Ride, Walk, Other) if available (string)
+- `date`: Local date of workout if available (date)
+- `duration_hours`: Activity duration in hours (float)
+- `distance_m`: Distance in meters if available (float)
+- `calories`: Calories burned (float)
+- `hr_avg`: Average heart rate if available (float)
+- `hr_max`: Maximum heart rate if available (float)
+- `elev_gain_m`: Elevation gain in meters if available (float)
+- `elev_avg_m`: Average elevation in meters if available (float)
+- `training_stress`: Training stress score if available (float)
+- `sex`: Gender ("m" or "f") if available (string)
+- `age`: Age in years if available (float)
+- `weight_kg`: Body weight in kilograms if available (float)
+
+### Configuration
+The pipeline automatically loads environment variables from a `.env` file if it exists. This is the recommended approach for managing credentials and configuration.
+
+#### Option 1: Using .env file (Recommended)
+1. Copy the template: `cp config.env.example .env`
+2. Edit `.env` with your actual values
+3. Run the pipeline normally - it will automatically load from `.env`
+
+#### Option 2: Setting environment variables manually
+```bash
+# Strava API (required for Strava data)
+export STRAVA_ACCESS_TOKEN=your_access_token
+export STRAVA_CLIENT_ID=your_client_id
+export STRAVA_CLIENT_SECRET=your_client_secret
+export STRAVA_REFRESH_TOKEN=your_refresh_token
+
+# Data paths (optional, defaults shown)
+export PAMAP2_PATH=external/uci_pamap2
+export KAGGLE_FITBIT_PATH=external/kaggle_fitbit
+export DATA_DIR=data
+export ARCHIVE_DIR=archived_scripts
+
+# Output behavior
+export SAVE_CSV=true
+export SYNTHETIC_TARGET_ROWS=0
+
+# Identity defaults (used when external sources lack demographics)
+export DEFAULT_SEX=f
+export DEFAULT_AGE=33.0
+export DEFAULT_WEIGHT_KG=57.6
 ```
+
+**Security Note**: The `.env` file is already in `.gitignore` and will never be committed to git. Only the `config.env.example` template is tracked.
+
+### Usage Examples
+
+```bash
+# 1) Base run (likely fails with no sources)
+python pipelines/build_dataset.py
+
+# 2) Strava-only
+export STRAVA_ACCESS_TOKEN=xxxxx
+python pipelines/build_dataset.py
+
+# 3) Strava + UCI + Kaggle (local folders present)
+export PAMAP2_PATH=external/uci_pamap2
+export KAGGLE_FITBIT_PATH=external/kaggle_fitbit
+python pipelines/build_dataset.py
+
+# 4) With synthetic expansion
+export SYNTHETIC_TARGET_ROWS=500000
+python pipelines/build_dataset.py
+```
+
+### Pipeline Features
+- **Automatic archival**: Archives `scripts/` folder before each run
+- **Data backup**: Backs up existing `workout_data.*` and `workouts.*` files with timestamps
+- **Schema validation**: Ensures all required columns exist with proper types
+- **Synthetic expansion**: Optional dataset expansion with controlled jitter for scalability testing and model development
+- **Idempotent behavior**: Safe to re-run multiple times
+- **Comprehensive logging**: Detailed progress and error reporting
+
+### Key Decisions & Assumptions
+- **Strava calorie fallback**: When calories are missing from the API response (which may happen depending on the API scopes granted), the pipeline uses a conservative fallback estimation based on heart rate and duration. This ensures data completeness while maintaining accuracy.
+- **Missing elevation/TSS**: Some sources don't provide elevation or training stress scores, so these fields are set to null in the unified schema.
+- **Demographic defaults**: Uses configurable defaults when external sources lack demographics (age, sex, weight).
+- **Workout aggregation**: UCI PAMAP2 and Kaggle data are aggregated from second-by-second to workout-level for consistency with Strava data.
+- **Column mapping**: Kaggle loader uses heuristics to handle different schema variations across different Fitbit-style datasets.
+- **Stable IDs**: Each workout gets a unique, stable identifier that combines source, athlete/subject ID, and activity details for traceability.
+
+### Synthetic Expansion for Scalability
+The pipeline includes an optional synthetic data expansion feature that can scale datasets to millions of rows for stress testing and scalability demonstrations. When `SYNTHETIC_TARGET_ROWS` is set, the pipeline:
+
+- Bootstrap samples existing data with replacement to reach the target size
+- Applies small, controlled jitter (±5%) to numeric fields to maintain realism
+- Ensures unique workout IDs for all synthetic rows
+- Marks synthetic data with `source = "SYNTHETIC"` for traceability
+- Uses a fixed random seed for reproducible results
+
+This feature is particularly useful for:
+- Testing model performance at scale
+- Demonstrating system capabilities with large datasets
+- Development and testing without requiring massive real datasets
 
 ## Usage
 

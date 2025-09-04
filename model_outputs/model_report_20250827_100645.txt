@@ -1,0 +1,88 @@
+================================================================================
+ATHLETE CALORIE PREDICTOR - MODEL REPORT
+================================================================================
+
+MODEL OVERVIEW
+MODEL OVERVIEW
+----------------------------------------
+Best Model: XGBoost
+Training Records: 742
+Features: 19
+Cross-Validation Folds: 5
+
+TECHNICAL PERFORMANCE
+----------------------------------------
+R² Score: 0.992
+MAE: 2.9 calories
+RMSE: 5.9 calories
+MAE Percentage: 3.3%
+
+MODEL COMPARISON (Cross-Validation)
+----------------------------------------
+Linear Regression:
+  R² CV: 0.967 ± 0.006
+  MAE CV: 7.1 ± 0.5
+  RMSE CV: 12.6 ± 7.5
+
+Ridge Regression:
+  R² CV: 0.968 ± 0.007
+  MAE CV: 7.1 ± 0.7
+  RMSE CV: 12.4 ± 7.6
+
+Lasso Regression:
+  R² CV: 0.968 ± 0.007
+  MAE CV: 7.1 ± 0.6
+  RMSE CV: 12.5 ± 7.5
+
+Random Forest:
+  R² CV: 0.969 ± 0.032
+  MAE CV: 4.3 ± 1.2
+  RMSE CV: 13.1 ± 14.4
+
+Gradient Boosting:
+  R² CV: 0.976 ± 0.025
+  MAE CV: 3.6 ± 1.1
+  RMSE CV: 11.7 ± 12.6
+
+LightGBM:
+  R² CV: 0.939 ± 0.040
+  MAE CV: 5.7 ± 1.8
+  RMSE CV: 17.7 ± 15.8
+
+XGBoost:
+  R² CV: 0.977 ± 0.027
+  MAE CV: 3.3 ± 0.9
+  RMSE CV: 11.3 ± 13.1
+
+BUSINESS IMPACT ANALYSIS
+----------------------------------------
+        Category                  Description Calorie_Range  Sample_Count       MAE      RMSE  Error_Percentage  Mean_Calories
+    Easy Workout Light jog, walking, recovery         0-300           145  0.678754  1.233743          1.040374      65.241379
+Moderate Workout 5K-10K run, moderate cycling       300-600             4 16.894623 23.937721          4.612866     366.250000
+
+FEATURE LIST
+----------------------------------------
+ 1. DURATION_ACTUAL
+ 2. DISTANCE_ACTUAL
+ 3. HRMAX
+ 4. HRAVG
+ 5. ELEVATIONAVG
+ 6. ELEVATIONGAIN
+ 7. TRAININGSTRESSSCOREACTUAL
+ 8. AGE
+ 9. WEIGHT
+10. SEX_ENCODED
+11. PACE
+12. SPEED
+13. INTENSITY_RATIO
+14. HR_RESERVE
+15. HR_ZONE
+16. ELEVATION_PER_KM
+17. DURATION_WEIGHT
+18. DISTANCE_WEIGHT
+19. HR_WEIGHT
+
+TRAINING SUMMARY
+----------------------------------------
+Model trained on authentic workout data with derived features.
+All features are mathematical transformations of existing physiological data.
