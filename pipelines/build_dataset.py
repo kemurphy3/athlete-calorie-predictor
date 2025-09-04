@@ -13,6 +13,7 @@ Features:
 - Optional synthetic data expansion
 - Idempotent behavior
 - Comprehensive logging
+- CSV-only output format (optimized for small datasets)
 """
 
 import os
@@ -31,8 +32,6 @@ import warnings
 import pandas as pd
 import numpy as np
 import requests
-import pyarrow as pa
-import pyarrow.parquet as pq
 
 # Load environment variables from .env file if it exists
 try:
@@ -80,7 +79,6 @@ class Config:
     DEFAULT_WEIGHT_KG: float = 57.6
     
     # Output behavior
-    SAVE_CSV: bool = True
     SYNTHETIC_TARGET_ROWS: int = 0
     
     def __post_init__(self):
@@ -104,7 +102,6 @@ class Config:
         self.DEFAULT_WEIGHT_KG = float(os.getenv('DEFAULT_WEIGHT_KG', self.DEFAULT_WEIGHT_KG))
         
         # Output behavior
-        self.SAVE_CSV = os.getenv('SAVE_CSV', 'true').lower() == 'true'
         self.SYNTHETIC_TARGET_ROWS = int(os.getenv('SYNTHETIC_TARGET_ROWS', self.SYNTHETIC_TARGET_ROWS))
 
 
@@ -831,20 +828,14 @@ class DatasetBuilder:
         return validated_df
     
     def _save_outputs(self, df: pd.DataFrame) -> None:
-        """Save the dataset to parquet and optionally CSV."""
+        """Save the dataset to CSV format."""
         data_path = Path(self.config.DATA_DIR)
         data_path.mkdir(parents=True, exist_ok=True)
         
-        # Save parquet (canonical format)
-        parquet_file = data_path / "workouts.parquet"
-        df.to_parquet(parquet_file, index=False)
-        logger.info(f"Dataset saved to {parquet_file}")
-        
-        # Save CSV if requested
-        if self.config.SAVE_CSV:
-            csv_file = data_path / "workouts.csv"
-            df.to_csv(csv_file, index=False)
-            logger.info(f"Dataset also saved to {csv_file}")
+        # Save CSV (primary format)
+        csv_file = data_path / "workouts.csv"
+        df.to_csv(csv_file, index=False)
+        logger.info(f"Dataset saved to {csv_file}")
         
         # Log final summary
         logger.info("=" * 50)
