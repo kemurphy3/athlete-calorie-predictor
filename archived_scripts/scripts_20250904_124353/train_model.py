@@ -91,19 +91,7 @@ class DataManager:
         # Define reasonable ranges based on exercise physiology
         extreme_calories = (self.df['CALORIES'] < 5) | (self.df['CALORIES'] > 2000) | (self.df['CALORIES'].isnull())
         extreme_duration = (self.df['DURATION_ACTUAL'] < 0.0167) | (self.df['DURATION_ACTUAL'] > 5)  # 1 min to 5 hours
-        
-        # Smart distance validation: only check distance for distance-based activities
-        distance_based_activities = ['Run', 'Ride', 'Walk', 'Hike', 'Swim']
-        if 'ACTIVITY_TYPE' in self.df.columns:
-            # Only validate distance for activities that should have distance
-            is_distance_activity = self.df['ACTIVITY_TYPE'].isin(distance_based_activities)
-            extreme_distance = (is_distance_activity & 
-                              ((self.df['DISTANCE_ACTUAL'] < 100) | (self.df['DISTANCE_ACTUAL'] > 100000)))
-            print(f"Found {(~is_distance_activity).sum()} non-distance activities (yoga, weights, etc.) - keeping these")
-        else:
-            # Fallback to original logic if no activity type column
-            extreme_distance = (self.df['DISTANCE_ACTUAL'] < 100) | (self.df['DISTANCE_ACTUAL'] > 100000)
-        
+        extreme_distance = (self.df['DISTANCE_ACTUAL'] < 100) | (self.df['DISTANCE_ACTUAL'] > 100000)  # 100m to 100km
         extreme_hravg = (self.df['HRAVG'] < 30) | (self.df['HRAVG'] > 250)  # HR range 30-250 bpm
         extreme_hrmax = (self.df['HRMAX'] < 30) | (self.df['HRMAX'] > 250)  # HR range 30-250 bpm
         extreme_age = (self.df['AGE'] < 18) | (self.df['AGE'] > 100)  # Age range 18-100 years
@@ -229,9 +217,12 @@ class EnhancedCaloriePredictor:
         if features_to_drop:
             print(f"Features to drop due to zero variance: {', '.join(features_to_drop)}")
         
-        # NOTE: Removed pace/speed features to prevent data leakage
-        # These features directly incorporate duration and distance which are proportional to calories
-        print("  Skipping pace/speed features (prevent data leakage)")
+        # Basic derived features (mathematical transformations of existing data)
+        if 'DURATION_ACTUAL' in self.df.columns:
+            self.df.loc[:, 'PACE'] = self.df['DURATION_ACTUAL'] / (self.df['DISTANCE_ACTUAL'] / 1000)  # hours per km
+            self.df.loc[:, 'SPEED'] = (self.df['DISTANCE_ACTUAL'] / 1000) / self.df['DURATION_ACTUAL']  # km per hour
+        else:
+            print("  Skipping pace/speed features (duration removed due to data leakage)")
         
         self.df.loc[:, 'INTENSITY_RATIO'] = self.df['HRAVG'] / self.df['HRMAX']  # exercise intensity metric
         
@@ -248,29 +239,33 @@ class EnhancedCaloriePredictor:
         
         # Interaction features (mathematical combinations of existing features)
         if 'WEIGHT' in self.df.columns and 'WEIGHT' not in features_to_drop:
-            # Only create HR_WEIGHT (doesn't use duration/distance to prevent leakage)
+            # Only create weight-based features if weight varies
+            if 'DURATION_ACTUAL' in self.df.columns:
+                self.df.loc[:, 'DURATION_WEIGHT'] = self.df['DURATION_ACTUAL'] * self.df['WEIGHT']
+            self.df.loc[:, 'DISTANCE_WEIGHT'] = (self.df['DISTANCE_ACTUAL'] / 1000) * self.df['WEIGHT']
             self.df.loc[:, 'HR_WEIGHT'] = self.df['HRAVG'] * self.df['WEIGHT'] / 100
         else:
             # Don't create weight-based features if weight is constant
             print("Skipping weight-based features (weight is constant)")
         
         # Define feature set (only includes features that exist in your data)
-        # NOTE: Removed DURATION_ACTUAL and DISTANCE_ACTUAL to prevent data leakage
-        # These are directly proportional to calories and cause unrealistic R² values
         potential_features = [
-            'HRMAX', 'HRAVG', 'ELEVATIONGAIN', 'AGE', 'WEIGHT', 'SEX_ENCODED', 
-            'INTENSITY_RATIO', 'HR_RESERVE', 'HR_ZONE', 'ELEVATION_PER_KM'
+            'DISTANCE_ACTUAL', 'HRMAX', 'HRAVG',
+            'ELEVATIONGAIN', 'AGE', 'WEIGHT', 'SEX_ENCODED', 'INTENSITY_RATIO',
+            'HR_RESERVE', 'HR_ZONE', 'ELEVATION_PER_KM'
         ]
         
         # Note: TRAININGSTRESSSCOREACTUAL and ELEVATIONAVG removed due to 100% missing data
         
-        # NOTE: Removed PACE, SPEED, and duration-based features to prevent data leakage
-        # These features directly incorporate duration/distance which are proportional to calories
+        # Add duration-based features only if duration exists
+        if 'DURATION_ACTUAL' in self.df.columns:
+            potential_features.extend(['PACE', 'SPEED'])
         
-        # Add weight-based features only if weight varies (excluding duration-based ones)
+        # Add weight-based features only if weight varies
         if 'WEIGHT' in self.df.columns and 'WEIGHT' not in features_to_drop:
-            # Only include HR_WEIGHT (doesn't use duration/distance)
-            potential_features.append('HR_WEIGHT')
+            if 'DURATION_ACTUAL' in self.df.columns:
+                potential_features.append('DURATION_WEIGHT')
+            potential_features.extend(['DISTANCE_WEIGHT', 'HR_WEIGHT'])
         
         # Filter to only include available features and exclude constant ones
         self.feature_columns = [col for col in potential_features if col in self.df.columns and col not in features_to_drop]
