@@ -27,13 +27,13 @@ st.markdown("### ML-Powered Workout Optimization with Real Data Analysis")
 # Display key metrics in columns
 col1, col2, col3, col4 = st.columns(4)
 with col1:
-    st.metric("Model Accuracy", "94% R²", "LightGBM")
+    st.metric("Model Accuracy", "83% R²", "Gradient Boosting")
 with col2:
-    st.metric("Mean Error", "58 calories", "±2.1%")
+    st.metric("Mean Error", "16 calories", "18% error rate")
 with col3:
-    st.metric("Dataset Size", "500k records", "Real workout data")
+    st.metric("Dataset Size", "~750 records", "Strava API data")
 with col4:
-    st.metric("Features", "18 derived", "Physiological ratios")
+    st.metric("Features", "12 derived", "Physiological ratios")
 
 st.markdown("---")
 
@@ -166,24 +166,24 @@ with col1:
                 'DISTANCE_ACTUAL': [distance_km * 1000],  # Convert to meters
                 'HRMAX': [hr_max],
                 'HRAVG': [hr_avg],
-                'ELEVATIONAVG': [elevation_gain / 2],  # Estimate average elevation
+                #'ELEVATIONAVG': [elevation_gain / 2],  # Estimate average elevation, removed for 100% missing data
                 'ELEVATIONGAIN': [elevation_gain],
-                'TRAININGSTRESSSCOREACTUAL': [intensity_ratio * 100],  # Estimate TSS
+                #'TRAININGSTRESSSCOREACTUAL': [intensity_ratio * 100],  # Removed for data leakage
                 'AGE': [age],
                 'WEIGHT': [weight_kg],
                 'SEX_ENCODED': [1 if sex == "Male" else 0]
             })
             
             # Create derived features
-            input_data['PACE'] = input_data['DURATION_ACTUAL'] / (input_data['DISTANCE_ACTUAL'] / 1000)
-            input_data['SPEED'] = (input_data['DISTANCE_ACTUAL'] / 1000) / input_data['DURATION_ACTUAL']
-            input_data['INTENSITY_RATIO'] = input_data['HRAVG'] / input_data['HRMAX']
-            input_data['HR_RESERVE'] = input_data['HRMAX'] - 70
-            input_data['HR_ZONE'] = (input_data['HRAVG'] - 70) / input_data['HR_RESERVE']
+            input_data['PACE'] = input_data['DURATION_ACTUAL'] / (input_data['DISTANCE_ACTUAL'] / 1000) 
+            #input_data['SPEED'] = (input_data['DISTANCE_ACTUAL'] / 1000) / input_data['DURATION_ACTUAL'] # Removed for data leakage
+            #input_data['INTENSITY_RATIO'] = input_data['HRAVG'] / input_data['HRMAX'] # Too many heart rate features
+            #input_data['HR_RESERVE'] = input_data['HRMAX'] - 70 # Too many heart rate features
+            #input_data['HR_ZONE'] = (input_data['HRAVG'] - 70) / input_data['HR_RESERVE'] # Too many heart rate features
             input_data['ELEVATION_PER_KM'] = input_data['ELEVATIONGAIN'] / (input_data['DISTANCE_ACTUAL'] / 1000)
             input_data['DURATION_WEIGHT'] = input_data['DURATION_ACTUAL'] * input_data['WEIGHT']
             input_data['DISTANCE_WEIGHT'] = (input_data['DISTANCE_ACTUAL'] / 1000) * input_data['WEIGHT']
-            input_data['HR_WEIGHT'] = input_data['HRAVG'] * input_data['WEIGHT'] / 100
+            #input_data['HR_WEIGHT'] = input_data['HRAVG'] * input_data['WEIGHT'] / 100 # Too many heart rate features
             
             # Ensure all required features are present
             for col in feature_columns:
@@ -371,7 +371,7 @@ with col1:
 with col2:
     st.markdown("### Links")
     st.markdown("[GitHub Repository](https://github.com/kemurphy3/athletic-performance-optimizer)")
-    st.markdown("[Contact](mailto:kemurphy3@gmail.com)")
+    st.markdown("[Contact](mailto:kate@katemurphy.io)")
     st.markdown("[LinkedIn](https://www.linkedin.com/in/kate-murphy-356b9648/)")
 
 def calculate_demo_calories(duration, distance, weight, hr_avg, elevation_gain):
