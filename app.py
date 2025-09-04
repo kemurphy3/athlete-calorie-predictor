@@ -33,7 +33,7 @@ with col2:
 with col3:
     st.metric("Dataset Size", "~750 records", "Strava API data")
 with col4:
-    st.metric("Features", "12 derived", "Physiological ratios")
+    st.metric("Features", "9 derived", "Physiological ratios")
 
 st.markdown("---")
 
