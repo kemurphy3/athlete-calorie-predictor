@@ -27,9 +27,9 @@ st.markdown("### ML-Powered Workout Optimization with Real Data Analysis")
 # Display key metrics in columns
 col1, col2, col3, col4 = st.columns(4)
 with col1:
-    st.metric("Model Accuracy", "83% R²", "Gradient Boosting")
+    st.metric("Model Accuracy", "80.6% R²", "XGBoost")
 with col2:
-    st.metric("Mean Error", "16 calories", "18% error rate")
+    st.metric("Mean Error", "17.2 calories", "19.3% error rate")
 with col3:
     st.metric("Dataset Size", "~750 records", "Strava API data")
 with col4:
