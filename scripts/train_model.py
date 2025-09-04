@@ -91,7 +91,19 @@ class DataManager:
         # Define reasonable ranges based on exercise physiology
         extreme_calories = (self.df['CALORIES'] < 5) | (self.df['CALORIES'] > 2000) | (self.df['CALORIES'].isnull())
         extreme_duration = (self.df['DURATION_ACTUAL'] < 0.0167) | (self.df['DURATION_ACTUAL'] > 5)  # 1 min to 5 hours
-        extreme_distance = (self.df['DISTANCE_ACTUAL'] < 100) | (self.df['DISTANCE_ACTUAL'] > 100000)  # 100m to 100km
+        
+        # Smart distance validation: only check distance for distance-based activities
+        distance_based_activities = ['Run', 'Ride', 'Walk', 'Hike', 'Swim']
+        if 'ACTIVITY_TYPE' in self.df.columns:
+            # Only validate distance for activities that should have distance
+            is_distance_activity = self.df['ACTIVITY_TYPE'].isin(distance_based_activities)
+            extreme_distance = (is_distance_activity & 
+                              ((self.df['DISTANCE_ACTUAL'] < 100) | (self.df['DISTANCE_ACTUAL'] > 100000)))
+            print(f"Found {(~is_distance_activity).sum()} non-distance activities (yoga, weights, etc.) - keeping these")
+        else:
+            # Fallback to original logic if no activity type column
+            extreme_distance = (self.df['DISTANCE_ACTUAL'] < 100) | (self.df['DISTANCE_ACTUAL'] > 100000)
+        
         extreme_hravg = (self.df['HRAVG'] < 30) | (self.df['HRAVG'] > 250)  # HR range 30-250 bpm
         extreme_hrmax = (self.df['HRMAX'] < 30) | (self.df['HRMAX'] > 250)  # HR range 30-250 bpm
         extreme_age = (self.df['AGE'] < 18) | (self.df['AGE'] > 100)  # Age range 18-100 years
