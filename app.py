@@ -170,19 +170,19 @@ with col1:
                 'ELEVATIONGAIN': [elevation_gain],
                 #'TRAININGSTRESSSCOREACTUAL': [intensity_ratio * 100],  # Removed for data leakage
                 'AGE': [age],
-                'WEIGHT': [weight_kg],
+                #'WEIGHT': [weight_kg],
                 'SEX_ENCODED': [1 if sex == "Male" else 0]
             })
             
             # Create derived features
             input_data['PACE'] = input_data['DURATION_ACTUAL'] / (input_data['DISTANCE_ACTUAL'] / 1000) 
-            #input_data['SPEED'] = (input_data['DISTANCE_ACTUAL'] / 1000) / input_data['DURATION_ACTUAL'] # Removed for data leakage
+            #input_data['SPEED'] = (input_data['DISTANCE_ACTUAL'] / 1000) / input_data['DURATION_ACTUAL'] # Redundant with PACE
             #input_data['INTENSITY_RATIO'] = input_data['HRAVG'] / input_data['HRMAX'] # Too many heart rate features
             #input_data['HR_RESERVE'] = input_data['HRMAX'] - 70 # Too many heart rate features
             #input_data['HR_ZONE'] = (input_data['HRAVG'] - 70) / input_data['HR_RESERVE'] # Too many heart rate features
             input_data['ELEVATION_PER_KM'] = input_data['ELEVATIONGAIN'] / (input_data['DISTANCE_ACTUAL'] / 1000)
-            input_data['DURATION_WEIGHT'] = input_data['DURATION_ACTUAL'] * input_data['WEIGHT']
-            input_data['DISTANCE_WEIGHT'] = (input_data['DISTANCE_ACTUAL'] / 1000) * input_data['WEIGHT']
+            #input_data['DURATION_WEIGHT'] = input_data['DURATION_ACTUAL'] * input_data['WEIGHT'] # Weight is constant, so feature not needed
+            #input_data['DISTANCE_WEIGHT'] = (input_data['DISTANCE_ACTUAL'] / 1000) * input_data['WEIGHT'] # Weight is constant, so featurenot needed
             #input_data['HR_WEIGHT'] = input_data['HRAVG'] * input_data['WEIGHT'] / 100 # Too many heart rate features
             
             # Ensure all required features are present
@@ -370,7 +370,7 @@ with col1:
 
 with col2:
     st.markdown("### Links")
-    st.markdown("[GitHub Repository](https://github.com/kemurphy3/athletic-performance-optimizer)")
+    st.markdown("[GitHub Repository](https://github.com/kemurphy3/athletic-calorie-predictor)")
     st.markdown("[Contact](mailto:kate@katemurphy.io)")
     st.markdown("[LinkedIn](https://www.linkedin.com/in/kate-murphy-356b9648/)")
 
