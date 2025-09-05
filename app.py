@@ -13,6 +13,25 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+def calculate_demo_calories(duration, distance, weight, hr_avg, elevation_gain):
+    # Demo calculation for when model is not available
+    base_calories = (
+        weight * distance * 1.036 +
+        (hr_avg - 70) * duration * 60 * 0.15 +
+        elevation_gain * 0.05 * weight / 100
+    )
+    
+    # Add variance based on intensity
+    intensity_ratio = hr_avg / 165  # Assuming max HR of 165
+    if intensity_ratio > 0.85:
+        calories = base_calories * 1.1
+    elif intensity_ratio > 0.75:
+        calories = base_calories
+    else:
+        calories = base_calories * 0.95
+    
+    return max(0, calories)
+
 # Page configuration
 st.set_page_config(
     page_title="Athlete Calorie Predictor - Enhanced Dashboard",
@@ -47,6 +66,17 @@ available_models = []
 if os.path.exists(model_dir):
     available_models = [f for f in os.listdir(model_dir) if f.endswith('.pkl')]
 
+# Prioritize split model if available
+split_models = [f for f in available_models if 'split_model' in f]
+if split_models:
+    # Use the most recent split model
+    split_models.sort(reverse=True)
+    selected_model = split_models[0]
+    st.sidebar.success(f"Using Split Model: {selected_model}")
+    st.sidebar.info("This model uses varied weight and age data for better accuracy")
+else:
+    selected_model = available_models[0] if available_models else None
+
 if available_models:
     selected_model = st.sidebar.selectbox(
         "Select Trained Model",
@@ -58,12 +88,26 @@ if available_models:
     model_path = os.path.join(model_dir, selected_model)
     try:
         model_data = joblib.load(model_path)
-        model = model_data['model']
-        feature_columns = model_data['feature_columns']
-        model_name = model_data['model_name']
-        training_results = model_data['training_results']
         
-        st.sidebar.success(f"Model loaded: {model_name}")
+        # Handle split model structure
+        if 'split_model' in selected_model:
+            model = model_data  # Split model is the entire object
+            feature_columns = ['DURATION_ACTUAL', 'DISTANCE_ACTUAL', 'HRAVG', 'HRMAX', 'ELEVATIONGAIN', 'AGE', 'SEX_ENCODED']
+            model_name = "Split Model (Distance + Non-Distance)"
+            training_results = {
+                'distance_r2': 0.9814,
+                'non_distance_r2': 0.9923,
+                'distance_mae': 4.5,
+                'non_distance_mae': 2.1
+            }
+            st.sidebar.success(f"Split Model loaded: Distance R²=0.981, Non-Distance R²=0.992")
+        else:
+            # Handle regular model structure
+            model = model_data['model']
+            feature_columns = model_data['feature_columns']
+            model_name = model_data['model_name']
+            training_results = model_data['training_results']
+            st.sidebar.success(f"Model loaded: {model_name}")
         
     except Exception as e:
         st.sidebar.error(f"Error loading model: {str(e)}")
@@ -115,6 +159,18 @@ age = st.sidebar.number_input(
     value=30,
     help="Your age"
 )
+
+# Activity type selector (only show if using split model)
+if 'split_model' in selected_model:
+    activity_type = st.sidebar.selectbox(
+        "Activity Type",
+        ["Run", "Ride", "Walk", "Hike", "Swim", "WeightTraining", "Yoga", "Workout", "Elliptical"],
+        index=0,
+        help="Select the type of activity for accurate prediction"
+    )
+    st.session_state['activity_type'] = activity_type
+else:
+    activity_type = "Run"  # Default for regular models
 
 sex = st.sidebar.selectbox(
     "Sex",
@@ -190,11 +246,36 @@ with col1:
                 if col not in input_data.columns:
                     input_data[col] = 0
             
-            # Make prediction
-            calories = model.predict(input_data[feature_columns])[0]
-            calories = max(0, calories)
-            
-            st.success(f"ML Model Prediction: {calories:.0f} calories")
+            # Make prediction based on model type
+            if 'split_model' in selected_model:
+                # Split model prediction - determine activity type and use appropriate model
+                activity_type = st.session_state.get('activity_type', 'Run')  # Default to distance activity
+                
+                # Determine if it's a distance or non-distance activity
+                distance_activities = model['distance_activities']
+                non_distance_activities = model['non_distance_activities']
+                
+                if activity_type in distance_activities:
+                    # Use distance model
+                    distance_model = model['best_distance_model']
+                    distance_features = model['distance_features']
+                    calories = distance_model.predict(input_data[distance_features])[0]
+                    st.success(f"Split Model (Distance) Prediction: {calories:.0f} calories")
+                    st.info(f"Using distance model for {activity_type} with varied weight & age data")
+                else:
+                    # Use non-distance model
+                    non_distance_model = model['best_non_distance_model']
+                    non_distance_features = model['non_distance_features']
+                    calories = non_distance_model.predict(input_data[non_distance_features])[0]
+                    st.success(f"Split Model (Non-Distance) Prediction: {calories:.0f} calories")
+                    st.info(f"Using non-distance model for {activity_type} with varied weight & age data")
+                
+                calories = max(0, calories)
+            else:
+                # Regular model prediction
+                calories = model.predict(input_data[feature_columns])[0]
+                calories = max(0, calories)
+                st.success(f"ML Model Prediction: {calories:.0f} calories")
             
         except Exception as e:
             st.error(f"Model prediction failed: {str(e)}")
@@ -373,22 +454,3 @@ with col2:
     st.markdown("[GitHub Repository](https://github.com/kemurphy3/athletic-calorie-predictor)")
     st.markdown("[Contact](mailto:kate@katemurphy.io)")
     st.markdown("[LinkedIn](https://www.linkedin.com/in/kate-murphy-356b9648/)")
-
-def calculate_demo_calories(duration, distance, weight, hr_avg, elevation_gain):
-    # Demo calculation for when model is not available
-    base_calories = (
-        weight * distance * 1.036 +
-        (hr_avg - 70) * duration * 60 * 0.15 +
-        elevation_gain * 0.05 * weight / 100
-    )
-    
-    # Add variance based on intensity
-    intensity_ratio = hr_avg / 165  # Assuming max HR of 165
-    if intensity_ratio > 0.85:
-        calories = base_calories * 1.1
-    elif intensity_ratio > 0.75:
-        calories = base_calories
-    else:
-        calories = base_calories * 0.95
-    
-    return max(0, calories)

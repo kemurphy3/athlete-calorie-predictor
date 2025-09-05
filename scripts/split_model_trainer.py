@@ -35,8 +35,13 @@ class SplitModelTrainer:
         """Load and prepare the workout data."""
         print("Loading workout data...")
         
-        # Load data
-        df = pd.read_csv(filepath)
+        # Try to load varied weight data first, fallback to regular data
+        try:
+            df = pd.read_csv('data/workouts_with_varied_weight.csv')
+            print("Loaded data with varied weight")
+        except FileNotFoundError:
+            df = pd.read_csv(filepath)
+            print("Loaded standard data (constant weight)")
         
         # Standardize column names
         df.columns = df.columns.str.upper()
@@ -98,6 +103,30 @@ class SplitModelTrainer:
         # NOTE: Removed PACE calculation to avoid feature redundancy
         # PACE = DURATION_ACTUAL / DISTANCE_ACTUAL is just a mathematical transformation
         # of the same information, which can cause overfitting
+        
+        # Check if age is constant and calculate dynamic age if needed
+        if 'AGE' in df.columns and 'DATE' in df.columns:
+            age_variance = df['AGE'].nunique()
+            date_range_years = (pd.to_datetime(df['DATE'].max()) - pd.to_datetime(df['DATE'].min())).days / 365.25
+            
+            if age_variance == 1 and date_range_years > 1:
+                print(f"\n++ Age Analysis ++")
+                print(f"Age variance: {age_variance} unique value(s)")
+                print(f"Date range: {date_range_years:.1f} years")
+                print(f"Static age: {df['AGE'].iloc[0]}")
+                print(f"Calculating dynamic age from birthday...")
+                
+                # Use your birthday: 1991-03-13
+                birthday = pd.to_datetime('1991-03-13')
+                print(f"Birthday: {birthday.strftime('%Y-%m-%d')}")
+                
+                # Calculate dynamic age for each workout
+                df['AGE_DYNAMIC'] = (pd.to_datetime(df['DATE']) - birthday).dt.days / 365.25
+                print(f"Dynamic age range: {df['AGE_DYNAMIC'].min():.1f} to {df['AGE_DYNAMIC'].max():.1f} years")
+                
+                # Replace static age with dynamic age
+                df['AGE'] = df['AGE_DYNAMIC']
+                print("Replaced static age with dynamic age calculation")
         
         # Encode sex for both
         df['SEX_ENCODED'] = (df['SEX'] == 'M').astype(int)

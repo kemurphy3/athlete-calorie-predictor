@@ -1,0 +1,8 @@
+Weight Variation Impact Analysis Report
+==================================================
+
+Analysis Date: 2025-09-04 20:48:24
+Dataset: 1070 workouts
+Weight Range: 57.6 - 63.0 kg
+Weight Variation: 5.3 kg
+Overall Correlation: -0.0760
